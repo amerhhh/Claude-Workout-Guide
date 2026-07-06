@@ -43,6 +43,19 @@ Day-to-day flow: design here → Claude Code builds & pushes to GitHub → Repli
 
 # Log (newest first)
 
+### 2026-07-06 11:00 (PT) — Claude Code — ops — Pushed to GitHub; live Replit server tested end-to-end; DB left clean
+**Done:**
+- Pushed to github.com/amerhhh/Claude-Workout-Guide (merged GitHub's auto "Initial commit", kept project README; merge commit ab5d85d)
+- Amer deployed on Replit; live server tested end-to-end over HTTPS: healthz ✅, 401 on missing/wrong auth ✅, initialize + 32 tools listed via both auth layers ✅, full workout flow (start→exercise→check_time working/resting→feedback→rest→complete) ✅, streak=1 ✅, last-session callout ✅, 3-source metrics merge (whoop→apple_health coexist, manual rejected) ✅, attach_workout_metrics ✅, readiness context ✅, import_backup preview+confirm ✅
+- Test data wiped via import_backup with an empty payload — prod DB is pristine for real use
+**Decisions:**
+- Server is mounted under `/api/mcp/...` on the deployed instance (Amer's deployment config), not `/mcp/...` as in the repo's index.ts — connector URLs must include `/api`
+**Blockers / open items for next session:**
+- The tested URL is the **workspace dev domain** (`…riker.replit.dev`) — it sleeps when the workspace closes and showed intermittent empty responses under rapid sequential requests (all calls succeeded on retry; harmless for conversational use, but a Reserved VM deployment on `<app>.replit.app` is the reliable endpoint)
+- Add connector URLs to Claude clients (phone: secret-path URL; Claude Code: bearer) and run a first real coaching session with skills/workout-coach.md
+**Next suggested step:**
+- Confirm Reserved VM deployment URL, update connectors, first real workout session
+
 ### 2026-07-06 00:05 (PT) — Claude Code — build — v1 built & verified: full MCP server, 32 tools, 22 tests green, live HTTP+Postgres check passed
 **Done:**
 - Scaffolded repo per §3 (pnpm workspace: `apps/mcp-server`, `packages/shared`, `skills/`); renamed spec files to SPEC.md / HANDOFF.md; git repo initialized
