@@ -1,0 +1,16 @@
+{
+  "name": "workoutguide",
+  "private": true,
+  "version": "1.0.0",
+  "description": "WorkoutGuide MCP server — Claude is the coach, this is the memory",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @workoutguide/mcp-server dev",
+    "start": "pnpm --filter @workoutguide/mcp-server start",
+    "test": "pnpm -r test",
+    "db:generate": "pnpm --filter @workoutguide/mcp-server db:generate",
+    "db:migrate": "pnpm --filter @workoutguide/mcp-server db:migrate"
+  },
+  "packageManager": "pnpm@11.10.0"
+}
