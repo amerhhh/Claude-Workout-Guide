@@ -43,6 +43,33 @@ Day-to-day flow: design here → Claude Code builds & pushes to GitHub → Repli
 
 # Log (newest first)
 
+### 2026-07-07 02:27 (UTC) — Cowork (Replit Agent) — ops — Git write access established; HANDOFF pushed to GitHub
+
+**Done:**
+- Configured `GITHUB_CLAUDE_WORKOUT_REPO` Replit secret (classic PAT, `ghp_` prefix) — authenticated as `amerhhh`, read+write access to this repo
+- Replit Agent can now clone, write HANDOFF entries, and push directly to GitHub without user as intermediary
+- MCP server still live and healthy: `/api/healthz` → `{"ok":true}`
+- **This entry was committed and pushed to GitHub via API** — Claude Code can pull and continue from here
+
+**Decisions:**
+- Using `GITHUB_CLAUDE_WORKOUT_REPO` (not `GITHUB_TOKEN`) as secret name to avoid collision with Replit's own git credential manager
+- Classic PAT (`ghp_`) required — fine-grained PATs (`github_pat_`) failed auth consistently in Replit's environment
+- Pushing via GitHub Contents API (not git CLI) because Replit's sandbox restricts direct git operations in the main agent
+
+**Sync flow (now fully automated from Replit side):**
+- Claude Code pushes to GitHub → Amer tells Replit Agent what changed → Agent re-copies changed files, runs `pnpm install` if deps changed, rebuilds `lib/workoutguide-shared` if shared changed, restarts workflow
+- Replit Agent can now push HANDOFF updates via GitHub API — no copy-paste to Claude Code needed
+
+**Blockers / open items for next session:**
+- Publish in Replit UI to get stable `*.replit.app` domain (dev URL is ephemeral)
+- `artifact.toml` prod run path needs updating before first production deploy (`dist/index.mjs` → `dist/index.js`)
+- MCP_AUTH_TOKEN + MCP_PATH_SECRET currently stored as plain env vars — move to Replit Secrets before publishing
+
+**Next suggested step:**
+- Amer: click Publish in Replit to get stable domain, update connector URLs in Claude clients
+- Claude Code: seed Amer's weekly routine as per-day templates, then first real coaching session
+
+
 ### 2026-07-06 19:50 (PT) — Claude Code — ops — Correction + Cowork's deploy entry merged into this log
 **Done:**
 - Added the Cowork (Replit Agent) 02:27 UTC deploy entry below (received via Amer; live credential values redacted from the committed version — they stay in Replit env and client connector configs)
