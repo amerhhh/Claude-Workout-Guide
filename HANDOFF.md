@@ -43,6 +43,36 @@ Day-to-day flow: design here → Claude Code builds & pushes to GitHub → Repli
 
 # Log (newest first)
 
+### 2026-07-07 (UTC) — Cowork (Replit Agent) — ops — First production deploy: fixed shared lib build; stable *.replit.app URL live
+
+**Done:**
+- Clicked Publish in Replit UI — registered deployment at `https://claude-workout-guide.replit.app`
+- First build failed: TypeScript errors — `@workoutguide/shared` declaration files (`.d.ts` in `dist/`) are gitignored, so production build couldn't find them
+  - Root cause: production build command only ran `pnpm --filter @workspace/api-server run build` — the shared lib was never compiled first
+  - `tsx` in dev mode reads `.ts` directly, masking the issue in development
+  - Errors: missing `ideas`/`plans` on BackupPayload type, missing `planCategorySchema`/`trainingPlanPayloadSchema` etc. from `@workoutguide/shared`, `"timezone"` not in SettingKey union
+- Fix: updated `artifacts/api-server/.replit-artifact/artifact.toml` production build command to:
+  `sh -c "pnpm run typecheck:libs && pnpm --filter @workspace/api-server run build"`
+  `typecheck:libs` runs `tsc --build` on all composite libs (emits fresh `.d.ts` into `dist/`) before the api-server `tsc` compiles
+- Re-published after fix — awaiting successful build confirmation
+
+**Critical lesson for future deploys:**
+- `dist/` is gitignored — production builds MUST run `pnpm run typecheck:libs` before building any artifact that imports `@workoutguide/shared`
+- This is already baked into `artifact.toml` now; do not change the build command back to filter-only
+
+**Permanent URLs (stable — use these in Claude connectors):**
+- Health: `https://claude-workout-guide.replit.app/api/healthz` → `{"ok":true}`
+- MCP secret-path (Claude mobile/claude.ai): `https://claude-workout-guide.replit.app/api/mcp/<MCP_PATH_SECRET — stored in Replit env var MCP_PATH_SECRET>`
+- MCP bearer (Claude Code): `https://claude-workout-guide.replit.app/api/mcp` + `Authorization: Bearer <MCP_AUTH_TOKEN — stored in Replit env var MCP_AUTH_TOKEN>`
+
+**Blockers / open items for next session:**
+- Verify health check on production URL: `https://claude-workout-guide.replit.app/api/healthz`
+- Update Claude client connector URLs from ephemeral dev URL (`riker.replit.dev`) to the permanent `*.replit.app` domain
+
+**Next suggested step:**
+- Amer: update connector URL in Claude clients to the `*.replit.app` URL above
+- Claude Code: seed Amer's real routine + first training plan
+
 ### 2026-07-07 (UTC) — Cowork (Replit Agent) — ops — v0.6 sync complete; 3 new tables; timezone set
 
 **Done:**
