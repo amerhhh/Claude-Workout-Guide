@@ -43,6 +43,26 @@ Day-to-day flow: design here → Claude Code builds & pushes to GitHub → Repli
 
 # Log (newest first)
 
+### 2026-07-07 (UTC) — Cowork (Replit Agent) — ops — v0.6 sync complete; 3 new tables; timezone set
+
+**Done:**
+- Re-copied `apps/mcp-server/src/` → `artifacts/api-server/src/` (v0.6: new tools/ideas.ts, tools/plans.ts, lib/planStatus.ts; updated schema, server, workout, metrics, exportImport)
+- Re-copied `packages/shared/src/` → `lib/workoutguide-shared/src/` (updated schemas.ts)
+- Applied migration `0001_round_millenium_guard.sql`: 3 new tables (ideas, planned_sessions, plans) + FK constraints
+- `pnpm install` — already up to date, no new deps
+- Set `timezone = America/Los_Angeles` in app_settings via SQL
+- Restarted API server workflow — health check `{"ok":true}`
+- Presented `docs/claude-project-guide.md` (v0.6) to Amer for Claude project knowledge swap
+
+**State:**
+- Server running v0.6 tools (now 35 tools including ideas + plans suite)
+- DB: 9 tables total (6 original + 3 new)
+- Timezone: America/Los_Angeles
+
+**Next suggested step:**
+- Amer: paste new project-knowledge file into claude.ai project, update connector URL to deployed `*.replit.app` domain once published
+
+
 ### 2026-07-06 22:15 (PT) — Claude Code — build — v0.6: training plans + calendar + adherence + ideas; 36/36 tests
 **Done:**
 - SPEC bumped to v0.6 (§5c): `plans` (category/active/date-range) + `planned_sessions` (time_of_day, planned_time HH:MM, status_override, completed_workout_id) + `ideas` (mid-run thought capture, auto-links to open session)
