@@ -43,6 +43,38 @@ Day-to-day flow: design here → Claude Code builds & pushes to GitHub → Repli
 
 # Log (newest first)
 
+### 2026-07-07 (UTC) — Cowork (Replit Agent) — ops — Two production deploy fixes; third publish pending
+
+**Done:**
+- **Build 1 (TS errors):** Fixed missing `@workoutguide/shared` declarations in production.
+  - Cause: production build only ran `pnpm --filter @workspace/api-server run build` — shared lib declarations (`.d.ts`) live in gitignored `dist/` and were never generated first.
+  - Fix: updated `artifacts/api-server/.replit-artifact/artifact.toml` build command to `sh -c "pnpm run typecheck:libs && pnpm --filter @workspace/api-server run build"`
+- **Build 2 (port never opens — server crashes on startup):** Fixed shared lib runtime ESM import.
+  - Cause: `@workoutguide/shared/package.json` had `"default": "./src/index.ts"` — `tsx` in dev handles raw TS, but production `node` cannot import `.ts` files; server crashed before `app.listen()`.
+  - Also: `lib/workoutguide-shared/tsconfig.json` had `emitDeclarationOnly: true` — no `.js` files were ever compiled.
+  - Fix 1: Removed `emitDeclarationOnly: true` from shared lib tsconfig → now emits both `.js` and `.d.ts`
+  - Fix 2: Updated `@workoutguide/shared` package.json exports to `"default": "./dist/index.js"` and `"main": "./dist/index.js"`
+- Dev server restarted and healthy after both fixes (`workoutguide mcp-server listening on :8080`)
+- Third publish clicked — awaiting successful build
+
+**Critical rules baked in:**
+- Shared lib `dist/` is gitignored — production MUST run `typecheck:libs` first (already in `artifact.toml`)
+- Shared lib exports MUST point to `./dist/index.js`, NOT `./src/index.ts` — `tsx` is dev-only; `node` is production
+- `emitDeclarationOnly: true` in a lib used at runtime = broken production builds; only use it for pure type-only libs
+
+**Permanent URLs (stable after next successful build):**
+- Health: `https://claude-workout-guide.replit.app/api/healthz` → `{"ok":true}`
+- MCP secret-path (Claude mobile/claude.ai): `https://claude-workout-guide.replit.app/api/mcp/<MCP_PATH_SECRET — see Replit env var>`
+- MCP bearer (Claude Code): `https://claude-workout-guide.replit.app/api/mcp` + `Authorization: Bearer <MCP_AUTH_TOKEN — see Replit env var>`
+
+**Blockers / open items for next session:**
+- Verify production URL after build: `https://claude-workout-guide.replit.app/api/healthz`
+- Update Claude client connectors from ephemeral dev URL to the permanent `*.replit.app` domain
+
+**Next suggested step:**
+- Amer: update connector URL in Claude clients to the permanent URL above
+- Claude Code: seed real routine + first training plan
+
 ### 2026-07-07 (UTC) — Cowork (Replit Agent) — ops — First production deploy: fixed shared lib build; stable *.replit.app URL live
 
 **Done:**
