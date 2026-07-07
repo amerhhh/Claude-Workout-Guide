@@ -8,7 +8,7 @@ const db = createDb(config.DATABASE_URL);
 const app = express();
 app.use(express.json({ limit: "20mb" })); // image_data / raw_json payloads
 
-app.get("/healthz", (_req, res) => {
+app.get(["/healthz", "/api/healthz"], (_req, res) => {
   res.json({ ok: true });
 });
 
@@ -21,14 +21,17 @@ app.get("/healthz", (_req, res) => {
  * Never log request URLs: the path itself is a credential.
  */
 function isAuthorized(path: string, authHeader: string | undefined): boolean {
-  if (path === `/mcp/${config.MCP_PATH_SECRET}`) return true;
-  if (path === "/mcp" && authHeader === `Bearer ${config.MCP_AUTH_TOKEN}`) {
+  // both bare and /api-prefixed mounts are served (the live Replit
+  // deployment publishes the /api/… form)
+  const normalized = path.startsWith("/api/") ? path.slice(4) : path;
+  if (normalized === `/mcp/${config.MCP_PATH_SECRET}`) return true;
+  if (normalized === "/mcp" && authHeader === `Bearer ${config.MCP_AUTH_TOKEN}`) {
     return true;
   }
   return false;
 }
 
-app.all(/^\/mcp(\/.*)?$/, async (req, res) => {
+app.all(/^(?:\/api)?\/mcp(\/.*)?$/, async (req, res) => {
   if (!isAuthorized(req.path, req.headers.authorization)) {
     res.status(401).json({
       jsonrpc: "2.0",

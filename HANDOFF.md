@@ -43,6 +43,18 @@ Day-to-day flow: design here → Claude Code builds & pushes to GitHub → Repli
 
 # Log (newest first)
 
+### 2026-07-06 19:35 (PT) — Claude Code — build — Repo now serves /api-prefixed routes, eliminating drift with the live Replit deployment
+**Done:**
+- index.ts serves both `/mcp/…` and `/api/mcp/…` (and both healthz forms) — the live Repl publishes the `/api` form, which had been hand-edited on Replit only
+- README connector URLs updated to the `/api` form; 22/22 tests still green
+**Decisions:**
+- Support both prefixes rather than only `/api` — existing docs/tests/local dev keep working, and a future clean redeploy can't break the published connector URLs
+**Blockers / open items for next session:**
+- On Replit: pull from GitHub (Git pane) and DISCARD the Repl-local hand edits — repo is the source of truth per SPEC §6; hand edits on the host get overwritten and cause exactly this drift
+- Amer's claude.ai project "Amer's workout buddy" + custom connector are live and working; rotation/templates still empty — seed his real routine next (days-of-week = named templates convention for now)
+**Next suggested step:**
+- Seed Amer's weekly routine as per-day templates, then first real coaching session
+
 ### 2026-07-06 11:00 (PT) — Claude Code — ops — Pushed to GitHub; live Replit server tested end-to-end; DB left clean
 **Done:**
 - Pushed to github.com/amerhhh/Claude-Workout-Guide (merged GitHub's auto "Initial commit", kept project README; merge commit ab5d85d)

@@ -40,10 +40,10 @@ pnpm test                     # vitest: merge/streak units + full e2e vs in-proc
 
 | Client | URL | Auth |
 |---|---|---|
-| claude.ai web / iOS connector | `https://<repl-domain>/mcp/<MCP_PATH_SECRET>` | secret path (layer 1) |
-| Claude Code / API clients | `https://<repl-domain>/mcp` | `Authorization: Bearer <MCP_AUTH_TOKEN>` (layer 2) |
+| claude.ai web / iOS connector | `https://<repl-domain>/api/mcp/<MCP_PATH_SECRET>` | secret path (layer 1) |
+| Claude Code / API clients | `https://<repl-domain>/api/mcp` | `Authorization: Bearer <MCP_AUTH_TOKEN>` (layer 2) |
 
-Health check: `GET /healthz`. Rotate either secret in Replit Secrets → redeploy →
+Both `/api/mcp/…` and bare `/mcp/…` mounts are served. Health check: `GET /api/healthz` (or `/healthz`). Rotate either secret in Replit Secrets → redeploy →
 update the connector URL. Worst case: rotate, wipe DB, `import_backup`.
 
 ## Schema notes (differences from SPEC §4)
