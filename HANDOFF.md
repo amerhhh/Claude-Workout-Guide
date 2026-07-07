@@ -43,6 +43,31 @@ Day-to-day flow: design here → Claude Code builds & pushes to GitHub → Repli
 
 # Log (newest first)
 
+### 2026-07-07 02:27 (UTC) — Cowork (Replit Agent) — ops — Git write access established; GITHUB_CLAUDE_WORKOUT_REPO secret configured
+
+**Done:**
+- Configured `GITHUB_CLAUDE_WORKOUT_REPO` Replit secret (classic PAT, `ghp_` prefix) — authenticated as `amerhhh`, read+write access to this repo
+- Replit Agent can now clone, write HANDOFF entries, and push directly to GitHub without user as intermediary
+- MCP server still live and healthy: `/api/healthz` → `{"ok":true}`
+
+**Decisions:**
+- Using `GITHUB_CLAUDE_WORKOUT_REPO` (not `GITHUB_TOKEN`) as secret name to avoid collision with Replit's own git credential manager, which intercepted the previous token
+- Classic PAT (`ghp_`) required — fine-grained PATs (`github_pat_`) failed auth consistently in Replit's environment
+
+**Sync flow (now fully automated from Replit side):**
+- Claude Code pushes to GitHub → Amer tells Replit Agent what changed → Agent re-copies changed files, runs `pnpm install` if deps changed, rebuilds `lib/workoutguide-shared` if shared changed, restarts workflow
+- Replit Agent can now push HANDOFF updates directly — no copy-paste to Claude Code needed
+
+**Blockers / open items for next session:**
+- Publish in Replit UI to get stable `*.replit.app` domain (dev URL is ephemeral)
+- `artifact.toml` prod run path needs updating before first production deploy (`dist/index.mjs` → `dist/index.js`)
+- MCP_AUTH_TOKEN + MCP_PATH_SECRET currently stored as plain env vars — move to Replit Secrets before publishing
+
+**Next suggested step:**
+- Amer: click Publish in Replit to get stable domain, update connector URLs in Claude clients
+- Claude Code: seed Amer's weekly routine as per-day templates, then first real coaching session
+
+
 ### 2026-07-07 (UTC) — Cowork (Replit Agent) — ops — Two production deploy fixes; third publish pending
 
 **Done:**
