@@ -43,6 +43,17 @@ Day-to-day flow: design here → Claude Code builds & pushes to GitHub → Repli
 
 # Log (newest first)
 
+### 2026-07-06 19:50 (PT) — Claude Code — ops — Correction + Cowork's deploy entry merged into this log
+**Done:**
+- Added the Cowork (Replit Agent) 02:27 UTC deploy entry below (received via Amer; live credential values redacted from the committed version — they stay in Replit env and client connector configs)
+**Decisions:**
+- CORRECTION to the 19:35 entry's blocker: the Replit workspace is NOT a git clone — Replit Agent copied sources into its own scaffold (`artifacts/api-server/`, `lib/workoutguide-shared/`). "Pull → discard local edits" does not apply. Sync flow per Cowork's entry: after Claude Code pushes to GitHub, tell Replit Agent what changed and it re-copies/installs/restarts.
+- Repo now serves `/api`-prefixed routes natively (19:35 entry), so future syncs can drop the Repl-side path patch.
+**Blockers / open items for next session:**
+- Same as Cowork's list: Publish for a stable `*.replit.app` domain; fix `artifact.toml` prod run path before first production deploy
+**Next suggested step:**
+- Seed Amer's weekly routine (per-day templates), first real coaching session
+
 ### 2026-07-06 19:35 (PT) — Claude Code — build — Repo now serves /api-prefixed routes, eliminating drift with the live Replit deployment
 **Done:**
 - index.ts serves both `/mcp/…` and `/api/mcp/…` (and both healthz forms) — the live Repl publishes the `/api` form, which had been hand-edited on Replit only
@@ -54,6 +65,38 @@ Day-to-day flow: design here → Claude Code builds & pushes to GitHub → Repli
 - Amer's claude.ai project "Amer's workout buddy" + custom connector are live and working; rotation/templates still empty — seed his real routine next (days-of-week = named templates convention for now)
 **Next suggested step:**
 - Seed Amer's weekly routine as per-day templates, then first real coaching session
+
+### 2026-07-07 02:27 (UTC) — Cowork (Replit Agent) — ops — Deployed to Replit: MCP server live, Replit-specific adaptations documented
+
+**Done:**
+- Cloned repo into Replit workspace (pulled from GitHub while repo was briefly public)
+- Copied `apps/mcp-server/src/` → `artifacts/api-server/src/`
+- Copied `packages/shared/` → `lib/workoutguide-shared/` (new Replit workspace lib)
+- Replaced Replit scaffold `artifacts/api-server/package.json` with MCP server deps (Express 4, @modelcontextprotocol/sdk, drizzle-orm, pg, tsx)
+- Set `lib/workoutguide-shared/package.json` exports to point at `./src/index.ts` (tsx handles TS directly in dev — no JS compilation needed at dev time)
+- Updated `artifacts/api-server/src/index.ts`: added `/api` prefix handling because Replit's reverse proxy routes `/api/*` to the service but does NOT strip the prefix — server receives full path `/api/healthz`, `/api/mcp/...`
+- Provisioned Replit PostgreSQL, ran migration SQL from `drizzle/0000_*.sql` directly — all 6 tables created
+- Generated MCP_AUTH_TOKEN + MCP_PATH_SECRET (stored in Replit Secrets/env vars — NOT in repo)
+- Server is live and verified: `/api/healthz` → `{"ok":true}`, auth 401 on unauthenticated `/api/mcp`, MCP transport responding correctly
+
+**Decisions:**
+- Replit proxy does NOT rewrite paths — all routes must handle both `/foo` (direct) and `/api/foo` (proxied). Done via array routes on healthz and regex on mcp handler
+- `@workoutguide/shared` exports `./src/index.ts` as default (not compiled dist) so `tsx watch` can import TS directly without a separate build step for the lib
+- MCP_AUTH_TOKEN and MCP_PATH_SECRET are Replit env vars, not secrets — fine for dev, consider moving to Secrets for prod
+
+**Live URLs (dev — only live when Replit project is open):**
+- Health: `https://463317e3-974c-4a30-9517-dab431174409-00-2z3nefgvkgvw1.riker.replit.dev/api/healthz`
+- MCP (secret path): same base URL `/api/mcp/<MCP_PATH_SECRET — value in Replit env, redacted from git>`
+- MCP (bearer): same base URL `/api/mcp` + `Authorization: Bearer <MCP_AUTH_TOKEN — value in Replit env, redacted from git>`
+
+**Blockers / open items for next session:**
+- Publish (deploy) in Replit UI to get a stable `*.replit.app` domain — dev URL above is ephemeral
+- When Claude Code pushes changes to GitHub, Replit needs: pull → `pnpm install` (if deps changed) → rebuild `lib/workoutguide-shared` (if shared changed) → restart workflow. Come back to Replit Agent (Cowork) and say what changed.
+- `artifact.toml` production run still references old path (`artifacts/api-server/dist/index.mjs`) — update to `node dist/index.js` and ensure `tsc` build works before first production deploy
+
+**Next suggested step:**
+- Claude Code: connect MCP server to Claude clients using the URLs above and run a real workout session to shake out any tool bugs
+- Amer: click Publish in Replit to get stable domain, then update URLs in Claude client connectors
 
 ### 2026-07-06 11:00 (PT) — Claude Code — ops — Pushed to GitHub; live Replit server tested end-to-end; DB left clean
 **Done:**
