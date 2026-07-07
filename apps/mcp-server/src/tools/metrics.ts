@@ -6,7 +6,12 @@ import {
   logDailyMetricsSchema,
 } from "@workoutguide/shared";
 import type { Db } from "../db/index.js";
-import { dailyMetrics, workoutHistory } from "../db/schema.js";
+import {
+  dailyMetrics,
+  workoutHistory,
+  plannedSessions,
+  plans,
+} from "../db/schema.js";
 import { ok, err, numOrNull } from "../lib/respond.js";
 import { mergeDailyMetrics, priorityOf, type MetricRow } from "../lib/merge.js";
 import { computeStreak } from "../lib/streak.js";
@@ -267,6 +272,14 @@ export function registerMetricsTools(server: McpServer, db: Db) {
         .from(workoutHistory)
         .where(isNotNull(workoutHistory.completedAt));
 
+      const todaysPlan = await db
+        .select({ session: plannedSessions, planName: plans.name, category: plans.category })
+        .from(plannedSessions)
+        .innerJoin(plans, eq(plannedSessions.planId, plans.id))
+        .where(
+          and(eq(plannedSessions.plannedDate, today), eq(plans.active, true)),
+        );
+
       return ok({
         serverDate: today,
         today: todayRow ? presentRow(todayRow) : null,
@@ -293,6 +306,16 @@ export function registerMetricsTools(server: McpServer, db: Db) {
         streakDays: computeStreak(
           completed.map((r) => r.completedAt!) as Date[],
         ),
+        todaysPlannedSessions: todaysPlan.map((t) => ({
+          id: t.session.id,
+          plan: t.planName,
+          category: t.category,
+          title: t.session.title,
+          timeOfDay: t.session.timeOfDay,
+          plannedTime: t.session.plannedTime,
+          notes: t.session.notes,
+          done: t.session.completedWorkoutId != null,
+        })),
       });
     },
   );

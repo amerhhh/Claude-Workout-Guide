@@ -1,6 +1,6 @@
 # WorkoutGuide MCP — Full Specification
 
-**Version:** 0.5 · **Created:** 2026-07-04 · **Last updated:** 2026-07-05
+**Version:** 0.6 · **Created:** 2026-07-04 · **Last updated:** 2026-07-06
 
 | Version | Date | Changes |
 |---|---|---|
@@ -9,6 +9,7 @@
 | 0.3 | 2026-07-05 | `check_time` server-clock tool; `app_settings` + settings tools; HANDOFF.md convention; enriched coaching skill (§6a) with readiness rules & overload discipline borrowed from claude-coach skill |
 | 0.4 | 2026-07-05 | **All open questions resolved** (§8): voice lines stripped by default w/ flag; two export tools; import_backup replace-only w/ confirmation; raw_json included in backups; manual metrics entry path added; prototype data = fresh start (no data migration). **Spec is build-ready.** |
 | 0.5 | 2026-07-05 | §5b generalized to multi-source health data: **Apple Health (Claude iOS app) is now the primary source**, totem/Whoop demoted to optional enrichment, manual entry as fallback; per-field merge + dedup/priority rules added |
+| 0.6 | 2026-07-06 | **§5c Training plans, calendar & ideas**: `plans` + `planned_sessions` tables (category, optional time-of-day/exact time), computed statuses (completed/missed/today/upcoming/skipped/moved), central calendar as a query, adherence scoring, auto-linking on `complete_workout`; `ideas` table for mid-run thought capture; `timezone` setting; backups extended (all new tables; workouts re-identified by `startedAt` on restore) |
 
 **Status:** Draft for review. Intended to be pasted into a Claude Project, refined, then handed to a new build session.
 
@@ -201,6 +202,90 @@ One row per calendar day, upserted from wearable data (currently Whoop via the t
 2. **Readiness-aware adjustments:** per §6a rules (HRV vs 7-day baseline, RHR elevation, recovery <40% if available) → propose lighter/heavier; Claude proposes, user decides
 3. **Post-workout:** after `complete_workout`, pull the matching activity (Apple Health workout or Whoop activity) and `attach_workout_metrics` (match by time window, dedup on `externalActivityId`)
 4. **Degrade gracefully:** no health source available → coach without it, never block a workout. **Manual fallback:** the user can state metrics conversationally ("recovery's 55 today, slept 6 hours") and Claude logs them via `log_daily_metrics` with `source: 'manual'`.
+
+### 5c. Training plans, calendar & ideas (v0.6)
+
+**Plans** group dated **planned sessions**; the calendar is a *query* across all
+active plans, never a stored aggregate — so pausing a plan (`active=false`)
+hides its sessions without touching anything, and there is no second copy to
+drift. WorkoutGuide is the source of truth for training; the user's real
+(Google/Apple) calendar is at most a read-only mirror maintained by Claude via
+a calendar connector, outside this server.
+
+**Status is computed, never stored.** Explicit signals win (statusOverride:
+`skipped`/`moved`/`completed`, then a linked `completed_workout_id`); remaining
+unlinked sessions soft-complete against completed workouts on the same date
+that no other session claims — so retro-logged workouts flip "missed" to
+"completed" with zero bookkeeping, and one workout can never tick two boxes.
+`complete_workout` auto-links when exactly one session is due that day;
+otherwise it returns the candidates so Claude asks. "Today" is evaluated in the
+`timezone` runtime setting (IANA, e.g. `America/Los_Angeles`) to avoid UTC
+boundary misclassification.
+
+#### `plans`
+| column | type | notes |
+|---|---|---|
+| id | serial PK | |
+| name | text NOT NULL | e.g. "Fall 10k" |
+| category | text NOT NULL default 'other' | running / strength / stretching / mind_body / other |
+| active | boolean NOT NULL default true | inactive = hidden from calendar, nothing lost |
+| start_date / end_date | date nullable | |
+| created_at | timestamp | |
+
+#### `planned_sessions`
+| column | type | notes |
+|---|---|---|
+| id | serial PK | |
+| plan_id | integer FK → plans NOT NULL | |
+| planned_date | date NOT NULL | |
+| time_of_day | text nullable | morning / afternoon / evening |
+| planned_time | text nullable | HH:MM, wins over time_of_day |
+| title | text NOT NULL | "Easy 5k" |
+| notes | text nullable | targets ("HR < 150") |
+| template_name | text nullable | optional link to a workout template |
+| status_override | text nullable | skipped / moved / completed |
+| completed_workout_id | integer FK → workout_history nullable | |
+| created_at | timestamp | |
+
+#### `ideas`
+Mid-session thought capture (runs especially): first-class and searchable,
+separate from workout notes. Auto-links to the open session if one exists.
+
+| column | type | notes |
+|---|---|---|
+| id | serial PK | |
+| content | text NOT NULL | |
+| context | text nullable | e.g. 'run' |
+| workout_history_id | integer FK nullable | |
+| created_at | timestamp | |
+
+| Tool | Input | Output / Effect |
+|---|---|---|
+| `import_training_plan` | `payloadJson`, `confirm?` | preview → confirm creates plan + dated sessions (additive) |
+| `list_plans` / `set_plan_active` / `delete_plan` | — / `id`,`active` / `id` | manage plans; delete removes its sessions too, history untouched |
+| `add_planned_session` / `update_planned_session` / `delete_planned_session` | session fields / partial incl. `statusOverride`, `completedWorkoutId` | CRUD + manual overrides ("count tonight's yoga as the mind-body session") |
+| `get_calendar` | `fromDate?`, `toDate?` (default today→+7d) | all active plans' sessions grouped by day with computed statuses |
+| `get_plan_adherence` | `planId?`, range? | completed/missed/skipped + completion rate (skipped/moved don't count against you), per plan and overall |
+| `log_idea` / `list_ideas` / `delete_idea` | `content`,`context?` / `search?`,`limit?` / `id` | capture and retrieve ideas |
+
+`get_readiness_context` additionally returns `todaysPlannedSessions`;
+`export_backup` includes ideas and plans (linked workouts re-identified by
+`startedAt` across restores, since ids renumber).
+
+**Training plan upload format:**
+```json
+{ "version": 1, "kind": "training_plan", "planName": "Fall 10k",
+  "category": "running",
+  "sessions": [
+    { "date": "2026-07-14", "title": "Easy 5k", "timeOfDay": "morning",
+      "notes": "HR under 150" },
+    { "date": "2026-07-16", "title": "Intervals 6x400m", "plannedTime": "18:00" }
+  ] }
+```
+
+Known limitation (same as `check_time`): Claude cannot self-fire — planned
+times don't produce push reminders. Real reminders come from mirroring to the
+user's actual calendar via a calendar connector.
 
 ### Config management (replaces the old Config page entirely)
 | Tool | Input | Output |

@@ -92,3 +92,47 @@ export const appSettings = pgTable("app_settings", {
   value: text("value").notNull(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+// --- v0.6 ---
+
+/** Freeform thoughts captured mid-session (runs especially) — first-class,
+ *  searchable, separate from workout notes. */
+export const ideas = pgTable("ideas", {
+  id: serial("id").primaryKey(),
+  content: text("content").notNull(),
+  context: text("context"), // e.g. 'run', 'rest day'
+  workoutHistoryId: integer("workout_history_id").references(
+    () => workoutHistory.id,
+  ),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/** A training plan (running, stretching, mind-body, …). The calendar is a
+ *  query across all active plans' sessions — not a table. */
+export const plans = pgTable("plans", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  category: text("category").notNull().default("other"),
+  active: boolean("active").notNull().default(true),
+  startDate: date("start_date"),
+  endDate: date("end_date"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const plannedSessions = pgTable("planned_sessions", {
+  id: serial("id").primaryKey(),
+  planId: integer("plan_id")
+    .notNull()
+    .references(() => plans.id),
+  plannedDate: date("planned_date").notNull(),
+  timeOfDay: text("time_of_day"), // morning | afternoon | evening
+  plannedTime: text("planned_time"), // HH:MM, wins over timeOfDay
+  title: text("title").notNull(),
+  notes: text("notes"),
+  templateName: text("template_name"),
+  statusOverride: text("status_override"), // skipped | moved | completed
+  completedWorkoutId: integer("completed_workout_id").references(
+    () => workoutHistory.id,
+  ),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});

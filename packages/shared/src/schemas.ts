@@ -86,6 +86,17 @@ export const SETTING_SCHEMAS = {
   default_duration_seconds: z.coerce.number().int().min(5).max(600),
   units: z.enum(["metric", "imperial"]),
   coaching_intensity: z.enum(["chill", "standard", "beast"]),
+  timezone: z.string().refine(
+    (tz) => {
+      try {
+        new Intl.DateTimeFormat("en-CA", { timeZone: tz });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    { message: "must be a valid IANA timezone, e.g. America/Los_Angeles" },
+  ),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;
@@ -98,6 +109,52 @@ export const setSettingSchema = z.object({
   value: z.string().min(1),
 });
 export type SetSetting = z.infer<typeof setSettingSchema>;
+
+// ---------------------------------------------------------------------------
+// Training plans & calendar (v0.6, SPEC §5c)
+// ---------------------------------------------------------------------------
+
+export const PLAN_CATEGORIES = [
+  "running",
+  "strength",
+  "stretching",
+  "mind_body",
+  "other",
+] as const;
+export const planCategorySchema = z.enum(PLAN_CATEGORIES);
+export type PlanCategory = z.infer<typeof planCategorySchema>;
+
+export const timeOfDaySchema = z.enum(["morning", "afternoon", "evening"]);
+const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD");
+const timeStr = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "HH:MM 24h");
+
+export const plannedSessionInputSchema = z.object({
+  date: dateStr,
+  title: z.string().min(1),
+  timeOfDay: timeOfDaySchema.nullable().optional(),
+  plannedTime: timeStr.nullable().optional(),
+  notes: z.string().nullable().optional(),
+  templateName: z.string().nullable().optional(),
+});
+export type PlannedSessionInput = z.infer<typeof plannedSessionInputSchema>;
+
+/** Upload format for a whole plan (import_training_plan). */
+export const trainingPlanPayloadSchema = z.object({
+  version: z.literal(1),
+  kind: z.literal("training_plan"),
+  planName: z.string().min(1),
+  category: planCategorySchema.optional(),
+  startDate: dateStr.optional(),
+  endDate: dateStr.optional(),
+  sessions: z.array(plannedSessionInputSchema).min(1),
+});
+export type TrainingPlanPayload = z.infer<typeof trainingPlanPayloadSchema>;
+
+export const sessionStatusOverrideSchema = z.enum([
+  "skipped",
+  "moved",
+  "completed",
+]);
 
 // ---------------------------------------------------------------------------
 // Export / import payloads (§5 export tables + §8 decisions)
@@ -167,6 +224,34 @@ export const exportedSettingSchema = z.object({
   value: z.string(),
 });
 
+export const exportedIdeaSchema = z.object({
+  content: z.string(),
+  context: z.string().nullable(),
+  /** startedAt ISO of the linked workout — ids renumber on restore */
+  workoutStartedAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export const exportedPlanSchema = z.object({
+  name: z.string(),
+  category: z.string(),
+  active: z.boolean(),
+  startDate: z.string().nullable(),
+  endDate: z.string().nullable(),
+  sessions: z.array(
+    z.object({
+      plannedDate: z.string(),
+      timeOfDay: z.string().nullable(),
+      plannedTime: z.string().nullable(),
+      title: z.string(),
+      notes: z.string().nullable(),
+      templateName: z.string().nullable(),
+      statusOverride: z.string().nullable(),
+      completedWorkoutStartedAt: z.string().nullable(),
+    }),
+  ),
+});
+
 /** Full personal backup (export_backup / import_backup). */
 export const backupPayloadSchema = z.object({
   version: z.literal(1),
@@ -179,6 +264,9 @@ export const backupPayloadSchema = z.object({
   looseLogs: z.array(exportedLogSchema).optional(),
   dailyMetrics: z.array(exportedDailyMetricSchema),
   settings: z.array(exportedSettingSchema),
+  /** v0.6 — optional so pre-0.6 backups still validate */
+  ideas: z.array(exportedIdeaSchema).optional(),
+  plans: z.array(exportedPlanSchema).optional(),
 });
 export type BackupPayload = z.infer<typeof backupPayloadSchema>;
 

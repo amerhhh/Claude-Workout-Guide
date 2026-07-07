@@ -2,8 +2,16 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { and, desc, eq, isNull, isNotNull } from "drizzle-orm";
 import type { Db } from "../db/index.js";
-import { exercises, exerciseLogs, workoutHistory } from "../db/schema.js";
+import {
+  exercises,
+  exerciseLogs,
+  workoutHistory,
+  plannedSessions,
+  plans,
+} from "../db/schema.js";
 import { ok, err } from "../lib/respond.js";
+import { todayInTimezone } from "../lib/planStatus.js";
+import { getSettingValue } from "./config.js";
 
 async function getExercise(db: Db, exerciseId: number) {
   const [row] = await db
@@ -372,12 +380,56 @@ export function registerWorkoutTools(server: McpServer, db: Db) {
         })
         .where(eq(workoutHistory.id, workoutHistoryId))
         .returning();
+
+      // auto-link to today's training plan: if exactly one unlinked planned
+      // session is due today, this workout completes it; if several, return
+      // the candidates so the coach can ask which one it was
+      const tz = (await getSettingValue(db, "timezone")) as string | null;
+      const completionDate = todayInTimezone(tz, now);
+      const candidates = await db
+        .select({ session: plannedSessions, planName: plans.name })
+        .from(plannedSessions)
+        .innerJoin(plans, eq(plannedSessions.planId, plans.id))
+        .where(
+          and(
+            eq(plannedSessions.plannedDate, completionDate),
+            eq(plans.active, true),
+            isNull(plannedSessions.completedWorkoutId),
+            isNull(plannedSessions.statusOverride),
+          ),
+        );
+      let linkedPlannedSession: { id: number; title: string; plan: string } | null =
+        null;
+      if (candidates.length === 1) {
+        await db
+          .update(plannedSessions)
+          .set({ completedWorkoutId: updated.id })
+          .where(eq(plannedSessions.id, candidates[0].session.id));
+        linkedPlannedSession = {
+          id: candidates[0].session.id,
+          title: candidates[0].session.title,
+          plan: candidates[0].planName,
+        };
+      }
+
       return ok({
         workoutHistoryId: updated.id,
         completedAt: updated.completedAt,
         exercisesCompleted: updated.exercisesCompleted,
         totalDurationSeconds: updated.totalDurationSeconds,
         loggedAttempts: logs.length,
+        linkedPlannedSession,
+        ...(candidates.length > 1
+          ? {
+              plannedSessionCandidates: candidates.map((c) => ({
+                id: c.session.id,
+                title: c.session.title,
+                plan: c.planName,
+                timeOfDay: c.session.timeOfDay,
+              })),
+              note: "several planned sessions are due today — ask which one this workout was, then link via update_planned_session(completedWorkoutId)",
+            }
+          : {}),
       });
     },
   );

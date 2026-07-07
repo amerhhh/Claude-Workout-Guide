@@ -53,3 +53,7 @@ update the connector URL. Worst case: rotate, wipe DB, `import_backup`.
 - `exercises.retired_at` — exercises with logged history are retired (hidden,
   history preserved) instead of hard-deleted; template switches use this too.
 - Backups carry a `looseLogs` array for attempts logged outside any session.
+- v0.6 adds `ideas`, `plans`, `planned_sessions` (SPEC §5c): training plans
+  with a computed-status calendar, adherence scoring, and mid-run idea
+  capture. 45 tools total. Client-facing usage lives in
+  [docs/claude-project-guide.md](docs/claude-project-guide.md).

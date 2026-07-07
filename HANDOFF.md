@@ -43,6 +43,26 @@ Day-to-day flow: design here → Claude Code builds & pushes to GitHub → Repli
 
 # Log (newest first)
 
+### 2026-07-06 22:15 (PT) — Claude Code — build — v0.6: training plans + calendar + adherence + ideas; 36/36 tests
+**Done:**
+- SPEC bumped to v0.6 (§5c): `plans` (category/active/date-range) + `planned_sessions` (time_of_day, planned_time HH:MM, status_override, completed_workout_id) + `ideas` (mid-run thought capture, auto-links to open session)
+- 13 new tools (45 total): import_training_plan (preview→confirm), plan CRUD/pause, planned-session CRUD w/ overrides, get_calendar (query across active plans, computed statuses), get_plan_adherence (skipped/moved don't count against you), log/list/delete_idea
+- Status computed never stored (`lib/planStatus.ts`, test-first): override > explicit link > soft-completion from unclaimed same-day workouts > today/upcoming/missed; `complete_workout` auto-links when exactly one session due, returns candidates otherwise; readiness context now includes todaysPlannedSessions
+- New `timezone` setting (IANA-validated) so "today"/"missed" track the user's day, not UTC
+- Backups extended: ideas + plans included; cross-restore workout links re-identified by `startedAt` (ids renumber); wipe order updated FK-safe
+- Migration `drizzle/0001_round_millenium_guard.sql`; tests 36/36 (6 planStatus unit, 8 plans e2e incl. backup roundtrip with link survival)
+- `docs/claude-project-guide.md` committed — the claude.ai project knowledge file (plan JSON formats, run/idea flow, safety rules)
+**Decisions:**
+- Calendar is a query, not a table — no aggregate to drift; real (Google/Apple) calendar is at most a read-only mirror via a calendar connector, outside this server
+- Adherence denominator = completed+missed only; skipped/moved excluded (zero-guilt rescheduling)
+- Live HR/pace mid-run: documented as best-effort/lagged — health integrations aren't real-time; the watch is the live display
+**Blockers / open items for next session:**
+- Replit needs sync: pull/re-copy sources + run `drizzle/0001_*.sql` against its Postgres + restart (tell Replit Agent). New tools won't exist on the live server until then
+- Amer: add docs/claude-project-guide.md to the claude.ai project knowledge (replaces the earlier draft I gave him in chat); set `timezone` = America/Los_Angeles once live
+- Still pending from before: Publish for stable *.replit.app domain; Amer's real routine/plan not yet entered
+**Next suggested step:**
+- Sync Replit → set timezone → import Amer's weekly routine + first training plan → first real coached session
+
 ### 2026-07-06 19:50 (PT) — Claude Code — ops — Correction + Cowork's deploy entry merged into this log
 **Done:**
 - Added the Cowork (Replit Agent) 02:27 UTC deploy entry below (received via Amer; live credential values redacted from the committed version — they stay in Replit env and client connector configs)

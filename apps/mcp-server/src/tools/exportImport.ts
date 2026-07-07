@@ -13,6 +13,9 @@ import {
   dailyMetrics,
   exercises,
   exerciseLogs,
+  ideas,
+  plannedSessions,
+  plans,
   workoutHistory,
   workoutTemplates,
 } from "../db/schema.js";
@@ -21,7 +24,7 @@ import { ok, err, numOrNull } from "../lib/respond.js";
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 
 async function buildBackup(db: Db): Promise<BackupPayload> {
-  const [allExercises, templates, workouts, logs, metrics, settings] =
+  const [allExercises, templates, workouts, logs, metrics, settings, allIdeas, allPlans, allSessions] =
     await Promise.all([
       db.select().from(exercises).orderBy(asc(exercises.sortOrder), asc(exercises.id)),
       db.select().from(workoutTemplates),
@@ -29,8 +32,15 @@ async function buildBackup(db: Db): Promise<BackupPayload> {
       db.select().from(exerciseLogs).orderBy(asc(exerciseLogs.id)),
       db.select().from(dailyMetrics).orderBy(asc(dailyMetrics.metricDate)),
       db.select().from(appSettings),
+      db.select().from(ideas).orderBy(asc(ideas.id)),
+      db.select().from(plans).orderBy(asc(plans.id)),
+      db.select().from(plannedSessions).orderBy(asc(plannedSessions.id)),
     ]);
   const nameById = new Map(allExercises.map((e) => [e.id, e.name]));
+  // ids renumber on restore — workouts are re-identified by startedAt
+  const workoutStartById = new Map(
+    workouts.map((w) => [w.id, w.startedAt.toISOString()]),
+  );
 
   const presentLog = (l: typeof exerciseLogs.$inferSelect) => ({
     exerciseName: nameById.get(l.exerciseId) ?? `exercise-${l.exerciseId}`,
@@ -93,12 +103,44 @@ async function buildBackup(db: Db): Promise<BackupPayload> {
       rawJson: m.rawJson,
     })),
     settings: settings.map((s) => ({ key: s.key, value: s.value })),
+    ideas: allIdeas.map((i) => ({
+      content: i.content,
+      context: i.context,
+      workoutStartedAt: i.workoutHistoryId
+        ? workoutStartById.get(i.workoutHistoryId) ?? null
+        : null,
+      createdAt: i.createdAt.toISOString(),
+    })),
+    plans: allPlans.map((p) => ({
+      name: p.name,
+      category: p.category,
+      active: p.active,
+      startDate: p.startDate,
+      endDate: p.endDate,
+      sessions: allSessions
+        .filter((s) => s.planId === p.id)
+        .map((s) => ({
+          plannedDate: s.plannedDate,
+          timeOfDay: s.timeOfDay,
+          plannedTime: s.plannedTime,
+          title: s.title,
+          notes: s.notes,
+          templateName: s.templateName,
+          statusOverride: s.statusOverride,
+          completedWorkoutStartedAt: s.completedWorkoutId
+            ? workoutStartById.get(s.completedWorkoutId) ?? null
+            : null,
+        })),
+    })),
   };
 }
 
 async function restoreBackup(db: Db, payload: BackupPayload) {
   await db.transaction(async (tx) => {
     // wipe in FK-safe order
+    await tx.delete(plannedSessions);
+    await tx.delete(plans);
+    await tx.delete(ideas);
     await tx.delete(exerciseLogs);
     await tx.delete(workoutHistory);
     await tx.delete(exercises);
@@ -159,6 +201,7 @@ async function restoreBackup(db: Db, payload: BackupPayload) {
       });
     };
 
+    const workoutIdByStart = new Map<string, number>();
     for (const w of payload.history) {
       const [workout] = await tx
         .insert(workoutHistory)
@@ -177,6 +220,7 @@ async function restoreBackup(db: Db, payload: BackupPayload) {
           metricsSource: w.metricsSource,
         })
         .returning();
+      workoutIdByStart.set(workout.startedAt.toISOString(), workout.id);
       for (const l of w.logs) {
         await insertLog(tx, l, workout.id);
       }
@@ -184,6 +228,47 @@ async function restoreBackup(db: Db, payload: BackupPayload) {
 
     for (const l of payload.looseLogs ?? []) {
       await insertLog(tx, l, null);
+    }
+
+    for (const i of payload.ideas ?? []) {
+      await tx.insert(ideas).values({
+        content: i.content,
+        context: i.context,
+        workoutHistoryId: i.workoutStartedAt
+          ? workoutIdByStart.get(i.workoutStartedAt) ?? null
+          : null,
+        createdAt: new Date(i.createdAt),
+      });
+    }
+
+    for (const p of payload.plans ?? []) {
+      const [plan] = await tx
+        .insert(plans)
+        .values({
+          name: p.name,
+          category: p.category,
+          active: p.active,
+          startDate: p.startDate,
+          endDate: p.endDate,
+        })
+        .returning();
+      if (p.sessions.length) {
+        await tx.insert(plannedSessions).values(
+          p.sessions.map((s) => ({
+            planId: plan.id,
+            plannedDate: s.plannedDate,
+            timeOfDay: s.timeOfDay,
+            plannedTime: s.plannedTime,
+            title: s.title,
+            notes: s.notes,
+            templateName: s.templateName,
+            statusOverride: s.statusOverride,
+            completedWorkoutId: s.completedWorkoutStartedAt
+              ? workoutIdByStart.get(s.completedWorkoutStartedAt) ?? null
+              : null,
+          })),
+        );
+      }
     }
 
     if (payload.dailyMetrics.length) {
@@ -295,6 +380,8 @@ export function registerExportImportTools(server: McpServer, db: Db) {
           (p.looseLogs?.length ?? 0),
         dailyMetrics: p.dailyMetrics.length,
         settings: p.settings.length,
+        ideas: p.ideas?.length ?? 0,
+        plans: p.plans?.length ?? 0,
       };
       if (!confirm) {
         return ok({
