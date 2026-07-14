@@ -43,6 +43,49 @@ Day-to-day flow: design here → Claude Code builds & pushes to GitHub → Repli
 
 # Log (newest first)
 
+### 2026-07-14 (PT) — Cowork (Replit Agent) — ops — OAuth 2.0 added; Claude.ai connector now works
+
+**Done:**
+- Diagnosed "Couldn't register with sign-in service" error: Claude.ai now requires OAuth 2.0 for all remote MCP connectors (changed since original deploy)
+- Added minimal OAuth 2.0 Authorization Server to `artifacts/api-server/src/oauth.ts`:
+  - `GET /.well-known/oauth-authorization-server` — OAuth metadata discovery (RFC 8414)
+  - `POST /api/oauth/register` — dynamic client registration (RFC 7591); always succeeds
+  - `GET /api/oauth/authorize` — single-user "Connect to Claude" HTML page
+  - `POST /api/oauth/authorize` — issues stateless signed auth code (HMAC-SHA256 keyed on MCP_AUTH_TOKEN; PKCE S256)
+  - `POST /api/oauth/token` — verifies PKCE + signature, returns MCP_AUTH_TOKEN as access_token
+- Updated `artifact.toml` to route `/.well-known` path to the API server (previously only `/api` was routed)
+- Added `app.set('trust proxy', true)` so `req.hostname` resolves correctly behind Replit's reverse proxy
+- Mounted OAuth router before existing routes in `src/index.ts`
+- Verified OAuth endpoints locally: metadata, registration, and health all return correct JSON
+- Published — awaiting build confirmation
+
+**How the OAuth flow works (for future Claude Code sessions):**
+1. Claude.ai fetches `/.well-known/oauth-authorization-server` → gets metadata
+2. POSTs to `/api/oauth/register` → gets client_id (not tracked server-side)
+3. Opens browser to `/api/oauth/authorize` → user sees "Connect to Claude" button
+4. User clicks → server issues signed auth code, redirects to Claude.ai callback
+5. Claude.ai POSTs to `/api/oauth/token` with code + code_verifier (PKCE)
+6. Server verifies signature + PKCE → returns MCP_AUTH_TOKEN as access_token
+7. Claude.ai makes MCP requests with `Authorization: Bearer MCP_AUTH_TOKEN` → existing handler validates ✓
+
+**Stateless design (important for autoscale):**
+- Auth codes are NOT stored in DB or memory — the code itself is a signed payload
+- PKCE verification is pure crypto: no server state needed between /authorize and /token requests
+- Multiple instances can each verify any code independently
+
+**Key files changed:**
+- `artifacts/api-server/src/oauth.ts` — new OAuth router (all endpoints)
+- `artifacts/api-server/src/index.ts` — import + mount OAuth router, add trust proxy
+- `artifacts/api-server/.replit-artifact/artifact.toml` — added `/.well-known` to paths
+
+**Connector URL (unchanged — same secret path still works too):**
+- MCP URL: `https://claude-workout-guide.replit.app/api/mcp/52eeacf0b8890c798c1cd6dd77ebbc0fc02f65a35a0efe05f2abdd213107b4f1`
+- After OAuth: Claude.ai will use Bearer token internally; connector URL stays the same
+
+**Next suggested step:**
+- Amer: click Connect on the connector page — should now open the "Connect to Claude" button page
+- Claude Code: no changes needed to sync; OAuth is Replit-side only
+
 ### 2026-07-07 02:27 (UTC) — Cowork (Replit Agent) — ops — Git write access established; GITHUB_CLAUDE_WORKOUT_REPO secret configured
 
 **Done:**
